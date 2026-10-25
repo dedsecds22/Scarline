@@ -1,17 +1,18 @@
-﻿# SCARLINE — Pygame prototípus
+# SCARLINE
 
-Egy 2D-s, oldalnézetes rakétás játék első játszható alapja. A rakéta folyamatosan előre halad, a játékos a hajtóművel felfelé tud gyorsítani, a gravitáció pedig lefelé húzza. Hiba után a pálya elölről indul, a kráterek eltűnnek, de a korábbi próbálkozások szellemként együtt indulnak az új rakétával, és a hibapontjukon felrobbantják a pályát, így ott át lehet menni.
+*[Magyar verzió: README.hu.md](README.hu.md)*
 
-![Alt text](./Assets/Screenshots/screenshot1.png "Screenshot")
+A fast, hard 2D side-view rocket game built with Pygame. The rocket flies forward on its own; you only control the engine. Every crash restarts the sector from the beginning and the craters vanish, but all your previous attempts launch together with you as **ghosts** and blast open the terrain at the point where they crashed, so you can get through there.
 
-## Követelmény
+![Screenshot](./Assets/Screenshots/screenshot.png "Screenshot")
 
-- Python 3.10 vagy újabb ajánlott
-- Pygame 2.x
+## Download (Windows)
 
-## Indítás Windows alatt
+Grab `Scarline-win64.zip` from the [Releases](https://github.com/dedsecds22/Scarline/releases) page, extract it and run `Scarline.exe`. No Python needed. The save file (`save.json`) is written next to the exe.
 
-Nyiss terminált ebben a mappában, majd:
+## Run from source
+
+Requires Python 3.10+ and Pygame 2.x.
 
 ```powershell
 py -m venv .venv
@@ -20,51 +21,38 @@ python -m pip install -r requirements.txt
 python main.py
 ```
 
-Ha a `py` parancs nincs telepítve, használd a `python` parancsot.
-
-## Windows release
-
-A kész, Python nélkül futtatható csomag a GitHub Releases oldalról tölthető le (`Scarline-win64.zip`): kicsomagolás után `Scarline.exe`. Saját build:
+## Build the Windows release
 
 ```powershell
 .venv\Scripts\python.exe -m pip install pyinstaller
 .venv\Scripts\python.exe -m PyInstaller --noconfirm --onedir --windowed --name Scarline --add-data "Assets\Background;Assets\Background" --add-data "Assets\Fonts;Assets\Fonts" --add-data "Assets\Ground_Stone;Assets\Ground_Stone" --add-data "Assets\Other;Assets\Other" main.py
 ```
 
-A mentés (`save.json`) az exe mellé kerül.
+## Controls
 
-## Irányítás
+| Key | Action |
+|---|---|
+| `Space` / `W` / `Up` | Engine thrust |
+| `Esc` | Menu (in the menu: back) |
+| `R` | Restart the sector completely (ghosts and best distance are wiped) |
+| `Up` / `Down` (`W` / `S`) | Menu selection |
+| `Left` / `Right` (`A` / `D`) | Change sector in the menu |
+| `Enter` / `Space` | Confirm; at the end of a sector, go to the next one |
 
-- `Space`, `W` vagy `Fel` — hajtómű, felfelé gyorsulás
-- Menü: `Fel/Le` vagy `W/S` választás, `Enter`/`Space` megerősítés
-- `R` — az aktuális szint teljes újrakezdése, a szellemek és a rekord törlése
-- `Esc` — menü (a menüben: vissza)
-- A szint végén `Enter`, `Space` vagy `N` — következő szint
+## Gameplay
 
-## Mi van már benne?
+- Deterministic, seed-based terrain with long, steep ramps and a narrow passage; each sector is narrower and faster than the last.
+- **Ghosts:** after every crash the previous runs replay and blast a crater where they failed. Each newer ghost starts slightly earlier, so the explosions arrive ahead of you instead of all at once.
+- **Gates:** sudden, almost fully closed sections that are impossible to pass until a ghost blasts them open.
+- **Gravity flip** (sector 2+: one zone, sector 4+: two): the whole view turns upside down, gravity pulls up and the engine pushes down. Marked by purple (enter) and cyan (exit) bands.
+- **Gravity turn** (sector 6+: one zone, sector 8+: two): the whole view rotates by 90°; you travel upward, gravity pulls right and the engine pushes left. Marked by orange (enter) and green (exit) bands.
+- **Sector 10** combines everything, including a flip zone that begins in the middle of a turn zone.
+- Sector selector (1–10) in the main menu, with a separate best distance per sector.
+- HUD with distance, speed, gravity indicator, "ahead" warnings and zone markers on the progress bar.
 
-- Fix seed alapján determinisztikusan generált plafon és padló.
-- Függőleges rakétamozgás gravitációval és hajtóművel.
-- Gyorsabb, nehezebb játék: hosszú, meredek emelkedők és lejtők, szűk járat.
-- Hiba után újraindulás a pálya elejéről; a korábbi próbák szellemként futnak, és a hibapontjukon krátert robbantanak.
-- Hirtelen, szinte zárt kapuk a pályán: kráter nélkül lehetetlen átjutni, a szellemek robbantása nyitja meg őket.
-- Minden újabb szellem korábbról (előrébb) indul, így a robbanások előbb történnek, mint hogy a játékos odaér.
-- Fix 120 Hz-es fizikai lépés, hogy a szellemek pontosan szinkronban maradjanak.
-- Grafika az Assets mappából ([assets.py](assets.py)): parallax űrháttér, animált nap és bolygók, egyetlen csempéből ismétlődő kő/föld terep, rakéta-sprite (a szellemek kék, áttetsző változata), PNG-s robbanás és porfelhők.
-- Főmenü (Start/Resume, Restart sector, New game, Quit) és szünet az Esc-re; egyedi betűtípus az Assets/Fonts mappából.
-- Gravitációváltás: a 2. szinttől egy, a 4. szinttől két zóna, ahol a világ fejjel lefelé fordul és a gravitáció felfelé hat (a hajtómű is megfordul). A pályán lila (belépés) és kék (visszaállás) sáv, felirat, a HUD-on gravitációjelző, villogó figyelmeztetés és jelölők a haladási csíkon.
-- Oldalirányú forgatás: a 6. szinttől egy, a 8.-tól két zóna, ahol az egész nézet 90 fokkal elfordul (előre = felfelé, a gravitáció jobbra húz, a hajtómű balra tol). Narancs (belépés) és zöld (kilépés) sáv jelzi. A 10. szinten minden kombinálva van: a fordított gravitációs zóna egy forgatott zóna közepén kezdődik.
-- Szektorválasztó a menüben (1–10): `Bal/Jobb` vagy `A/D`; szektoronként külön rekord, a mentés 3-as verziójú.
-- Képernyőrázkódás és HUD.
-- JSON mentés: a szint és a rekord (a szellemek nem maradnak meg újraindítás után).
-- A következő szint új, determinisztikus, szűkebb és gyorsabb pályát generál.
+## Technical notes
 
-## Fontos prototípus-korlát
-
-Ez az első játszható változat, ezért a kráterek mintavételezett görbékbe vágódnak, nem tetszőleges poligonból távolítanak el pixeleket. Ez ennél a két felületből álló pályatípusnál egyszerűbb és jól tesztelhető megoldás.
-
-
-
-
-
-
+- Fixed 120 Hz physics step, so ghost recordings always replay in sync.
+- Graphics are loaded from the `Assets` folder ([assets.py](assets.py)): parallax space backgrounds, an animated sun, planets, repeating ground tile, rocket sprite, PNG explosions and dust, custom font.
+- JSON save with the current sector and per-sector bests (ghosts are not saved).
+- Craters are cut into sampled floor/ceiling curves rather than arbitrary polygons, which keeps the terrain simple and testable.
