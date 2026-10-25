@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import random
+import sys
 from pathlib import Path
 
 import pygame
 
-ASSET_DIR = Path(__file__).resolve().parent / "Assets"
+_BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+ASSET_DIR = _BASE_DIR / "Assets"
 TILE = 128
 ROCKET_LENGTH = 52
 
@@ -45,7 +47,7 @@ class Assets:
         self.planets = [_load("Background", f"Planet{i}.png") for i in range(10)]
         self.sun_frames = [_load("Background", f"Sun_{i:05d}.png") for i in range(15)]
 
-        canvas_size = (width + TILE * 2, height + TILE * 2)
+        canvas_size = (width + TILE * 2, max(width, height) + TILE * 2)
         self.ground_tiles = {
             "Ground": _tile_canvas("Ground", canvas_size, 11),
             "Stone": _tile_canvas("Stone", canvas_size, 23),

@@ -3,3 +3,6 @@ __pycache__/
 *.py[cod]
 save.json
 save.tmp
+build/
+dist/
+*.spec

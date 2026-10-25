@@ -2,6 +2,8 @@
 
 Egy 2D-s, oldalnézetes rakétás játék első játszható alapja. A rakéta folyamatosan előre halad, a játékos a hajtóművel felfelé tud gyorsítani, a gravitáció pedig lefelé húzza. Hiba után a pálya elölről indul, a kráterek eltűnnek, de a korábbi próbálkozások szellemként együtt indulnak az új rakétával, és a hibapontjukon felrobbantják a pályát, így ott át lehet menni.
 
+![Alt text](./Assets/Screenshots/screenshot1.png "Screenshot")
+
 ## Követelmény
 
 - Python 3.10 vagy újabb ajánlott
@@ -19,6 +21,17 @@ python main.py
 ```
 
 Ha a `py` parancs nincs telepítve, használd a `python` parancsot.
+
+## Windows release
+
+A kész, Python nélkül futtatható csomag a GitHub Releases oldalról tölthető le (`Scarline-win64.zip`): kicsomagolás után `Scarline.exe`. Saját build:
+
+```powershell
+.venv\Scripts\python.exe -m pip install pyinstaller
+.venv\Scripts\python.exe -m PyInstaller --noconfirm --onedir --windowed --name Scarline --add-data "Assets\Background;Assets\Background" --add-data "Assets\Fonts;Assets\Fonts" --add-data "Assets\Ground_Stone;Assets\Ground_Stone" --add-data "Assets\Other;Assets\Other" main.py
+```
+
+A mentés (`save.json`) az exe mellé kerül.
 
 ## Irányítás
 
@@ -39,6 +52,9 @@ Ha a `py` parancs nincs telepítve, használd a `python` parancsot.
 - Fix 120 Hz-es fizikai lépés, hogy a szellemek pontosan szinkronban maradjanak.
 - Grafika az Assets mappából ([assets.py](assets.py)): parallax űrháttér, animált nap és bolygók, egyetlen csempéből ismétlődő kő/föld terep, rakéta-sprite (a szellemek kék, áttetsző változata), PNG-s robbanás és porfelhők.
 - Főmenü (Start/Resume, Restart sector, New game, Quit) és szünet az Esc-re; egyedi betűtípus az Assets/Fonts mappából.
+- Gravitációváltás: a 2. szinttől egy, a 4. szinttől két zóna, ahol a világ fejjel lefelé fordul és a gravitáció felfelé hat (a hajtómű is megfordul). A pályán lila (belépés) és kék (visszaállás) sáv, felirat, a HUD-on gravitációjelző, villogó figyelmeztetés és jelölők a haladási csíkon.
+- Oldalirányú forgatás: a 6. szinttől egy, a 8.-tól két zóna, ahol az egész nézet 90 fokkal elfordul (előre = felfelé, a gravitáció jobbra húz, a hajtómű balra tol). Narancs (belépés) és zöld (kilépés) sáv jelzi. A 10. szinten minden kombinálva van: a fordított gravitációs zóna egy forgatott zóna közepén kezdődik.
+- Szektorválasztó a menüben (1–10): `Bal/Jobb` vagy `A/D`; szektoronként külön rekord, a mentés 3-as verziójú.
 - Képernyőrázkódás és HUD.
 - JSON mentés: a szint és a rekord (a szellemek nem maradnak meg újraindítás után).
 - A következő szint új, determinisztikus, szűkebb és gyorsabb pályát generál.
@@ -46,6 +62,7 @@ Ha a `py` parancs nincs telepítve, használd a `python` parancsot.
 ## Fontos prototípus-korlát
 
 Ez az első játszható változat, ezért a kráterek mintavételezett görbékbe vágódnak, nem tetszőleges poligonból távolítanak el pixeleket. Ez ennél a két felületből álló pályatípusnál egyszerűbb és jól tesztelhető megoldás.
+
 
 
 

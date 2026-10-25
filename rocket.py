@@ -30,11 +30,12 @@ class Rocket:
         self.vy = 0.0
         self.angle = 0.0
 
-    def update(self, dt: float, thrust: bool, forward_speed: float) -> None:
+    def update(self, dt: float, thrust: bool, forward_speed: float, gravity_sign: float = 1.0) -> None:
         self.x += forward_speed * dt
-        self.vy += GRAVITY * dt
+        # Fordított gravitációnál a hajtómű is ellenkező irányba húz.
+        self.vy += gravity_sign * GRAVITY * dt
         if thrust:
-            self.vy += THRUST_ACCELERATION * dt
+            self.vy += gravity_sign * THRUST_ACCELERATION * dt
         self.vy = max(-MAX_VERTICAL_SPEED, min(MAX_VERTICAL_SPEED, self.vy))
         self.y += self.vy * dt
 

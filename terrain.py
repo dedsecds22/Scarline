@@ -18,6 +18,20 @@ from config import (
 )
 
 TILE_SIZE = 128
+MAX_COMBINED_LEVEL = 10
+
+
+def zone_kinds(level_index: int) -> list[str]:
+    """A szint gravitációs zónái sorrendben: 'flip' (fejjel lefelé) és 'side' (90 fokos forgatás)."""
+    if level_index < 2:
+        return []
+    if level_index < 4:
+        return ["flip"]
+    if level_index < 6:
+        return ["flip", "flip"]
+    if level_index < 8:
+        return ["flip", "side", "flip"]
+    return ["flip", "side", "flip", "side"]
 
 
 class TerrainProfile:
@@ -41,8 +55,8 @@ class TerrainProfile:
         self.step = int(step)
         self.sample_count = self.length // self.step + 1
         self.texture: pygame.Surface | None = None
-        self._layer: pygame.Surface | None = None
-        self._mask: pygame.Surface | None = None
+        self._layers: dict[tuple[int, int], tuple[pygame.Surface, pygame.Surface]] = {}
+        self.gate_xs: list[float] = []
 
         if floor is not None and ceiling is not None:
             loaded_floor = [float(v) for v in floor]
@@ -54,14 +68,18 @@ class TerrainProfile:
                 self.floor, self.ceiling = self._generate()
         else:
             self.floor, self.ceiling = self._generate()
-
+        self.zones = self._plan_zones()
     def _generate(self) -> tuple[list[float], list[float]]:
         rng = random.Random(self.seed)
         control_count = math.ceil(self.length / self.CONTROL_SPACING) + 2
 
         # Magasabb szinteken szűkebb a járat; a közepe viszont nagyobb
         # amplitúdóban mozog, így hosszú, meredek emelkedők/lejtők lesznek.
-        base_half_gap = max(62.0, 104.0 - (self.level_index - 1) * 5.0)
+        if self.level_index <= 4:
+            base_half_gap = 104.0 - (self.level_index - 1) * 5.0
+        else:
+            # Az 5. szinttől lassabban szűkül a járat (korábban 84 -> 59, most 90 -> 75).
+            base_half_gap = 90.0 - (self.level_index - 5) * 3.0
         gap_var = 22.0
         amplitude = 262.0 - (base_half_gap + gap_var)
         max_slope = min(0.62, 0.46 + (self.level_index - 1) * 0.02)
@@ -127,13 +145,51 @@ class TerrainProfile:
         rng = random.Random(self.seed * 31 + 7)
         spacing = max(1100.0, 1900.0 - (self.level_index - 1) * 120.0)
         gate_width = 50
+        self.gate_xs: list[float] = []
         x = 1500.0
         while x < self.length - 600:
+            self.gate_xs.append(x)
             first = int(x / self.step)
             for i in range(first, min(self.sample_count, first + gate_width // self.step + 1)):
                 floors[i] = centers[i] - 2.0
                 ceilings[i] = centers[i] + 2.0
             x += spacing * rng.uniform(0.8, 1.2)
+
+    def _plan_zones(self) -> list[tuple[str, float, float]]:
+        """Gravitációs zónák (fajta, kezdet, vég) a szint sorszáma szerint."""
+        kinds = zone_kinds(self.level_index)
+        if not kinds:
+            return []
+        rng = random.Random(self.seed * 17 + 3)
+        low, high = 2000.0, 10300.0
+        slot = (high - low) / len(kinds)
+
+        def clear_of_gates(x: float) -> float:
+            # A váltópont ne essen egy kapu közelébe.
+            for _ in range(80):
+                if all(not (g - 260.0 < x < g + 310.0) for g in self.gate_xs):
+                    break
+                x += 20.0
+            return x
+
+        zones: list[list] = []
+        for i, kind in enumerate(kinds):
+            length = min(rng.uniform(1400.0, 2000.0), slot - 900.0)
+            start = low + i * slot + rng.uniform(100.0, max(100.0, slot - length - 700.0))
+            zones.append([kind, start, start + length])
+
+        if self.level_index >= MAX_COMBINED_LEVEL:
+            # Kombinált szakasz: a fordított gravitáció egy forgatott zóna közepén kezdődik.
+            side = zones[1]
+            zones[2] = ["flip", side[1] + 0.5 * (side[2] - side[1]), side[2] + 450.0]
+
+        return [(kind, clear_of_gates(start), clear_of_gates(end)) for kind, start, end in zones]
+
+    def is_flipped(self, x: float) -> bool:
+        return any(kind == "flip" and start <= x < end for kind, start, end in self.zones)
+
+    def is_rotated(self, x: float) -> bool:
+        return any(kind == "side" and start <= x < end for kind, start, end in self.zones)
 
     def restore(self) -> None:
         """Visszaállítja az eredeti, kráter nélküli pályát."""
@@ -220,15 +276,15 @@ class TerrainProfile:
 
     def _draw_textured(self, surface: pygame.Surface, camera_x: float, floor_polygon: list, ceiling_polygon: list) -> None:
         size = surface.get_size()
-        if self._layer is None or self._layer.get_size() != size:
-            self._layer = pygame.Surface(size, pygame.SRCALPHA)
-            self._mask = pygame.Surface(size, pygame.SRCALPHA)
-        self._mask.fill((0, 0, 0, 0))
-        pygame.draw.polygon(self._mask, (255, 255, 255, 255), floor_polygon)
-        pygame.draw.polygon(self._mask, (255, 255, 255, 255), ceiling_polygon)
-        self._layer.blit(self.texture, (-(int(camera_x) % TILE_SIZE), 0))
-        self._layer.blit(self._mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
-        surface.blit(self._layer, (0, 0))
+        if size not in self._layers:
+            self._layers[size] = (pygame.Surface(size, pygame.SRCALPHA), pygame.Surface(size, pygame.SRCALPHA))
+        layer, mask = self._layers[size]
+        mask.fill((0, 0, 0, 0))
+        pygame.draw.polygon(mask, (255, 255, 255, 255), floor_polygon)
+        pygame.draw.polygon(mask, (255, 255, 255, 255), ceiling_polygon)
+        layer.blit(self.texture, (-(int(camera_x) % TILE_SIZE), 0))
+        layer.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+        surface.blit(layer, (0, 0))
 
     def to_save_data(self) -> dict:
         return {

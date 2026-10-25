@@ -8,7 +8,6 @@ from dataclasses import dataclass
 
 import pygame
 
-from config import HEIGHT
 
 
 @dataclass
@@ -172,7 +171,7 @@ class Effects:
         for p in self.particles:
             screen_x = int(p.x - camera_x + shake_x)
             screen_y = int(center_y - p.y + shake_y)
-            if screen_x < -20 or screen_x > surface.get_width() + 20 or screen_y < -20 or screen_y > HEIGHT + 20:
+            if screen_x < -20 or screen_x > surface.get_width() + 20 or screen_y < -20 or screen_y > surface.get_height() + 20:
                 continue
             fade = max(0.0, min(1.0, p.life / max(0.001, p.max_life)))
             radius = max(1, int(p.size * (0.45 + 0.55 * fade)))
