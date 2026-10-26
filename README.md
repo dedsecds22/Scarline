@@ -47,7 +47,10 @@ python main.py
 - **Gravity flip** (sector 2+: one zone, sector 4+: two): the whole view turns upside down, gravity pulls up and the engine pushes down. Marked by purple (enter) and cyan (exit) bands.
 - **Gravity turn** (sector 6+: one zone, sector 8+: two): the whole view rotates by 90°; you travel upward, gravity pulls right and the engine pushes left. Marked by orange (enter) and green (exit) bands.
 - **Sector 10** combines everything, including a flip zone that begins in the middle of a turn zone.
-- Sector selector (1–10) in the main menu, with a separate best distance per sector.
+- **Sectors 11–16:** wider tunnels, but **moving mines** sweep across the passage. Ghosts destroy mines just like they blast craters: a mine near where a previous run crashed is gone on the next attempt.
+- **Sector 13+:** **dark zones** — the level is black and lit only by periodic lightning flashes (about once a second); mines show a red beacon. Marked by violet (enter) and yellow (exit) bands.
+- **Sectors 15–16:** everything combined: flip and turn zones, dark zones and moving mines.
+- Sector selector (1–16) in the main menu, with a separate best distance per sector.
 - HUD with distance, speed, gravity indicator, "ahead" warnings and zone markers on the progress bar.
 
 ## Technical notes

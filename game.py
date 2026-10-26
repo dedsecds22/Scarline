@@ -37,7 +37,7 @@ from config import (
 from effects import Effects
 from assets import Assets
 from rocket import Rocket
-from terrain import TerrainProfile, zone_kinds
+from terrain import OBSTACLE_MIN_LEVEL, FULL_COMBO_LEVEL, TerrainProfile, dark_count, zone_kinds
 
 
 _APP_DIR = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
@@ -71,6 +71,12 @@ class Game:
         self.menu_index = 0
         self.view_flip = 1.0
         self.view_rot = 0.0
+        self.view_dark = 0.0
+        self.flash = 0.0
+        self.flash_timer = 0.0
+        self.flash_echo = 0.0
+        self._dark_layers: dict[tuple[int, int], pygame.Surface] = {}
+        self._mine_cache: dict[int, pygame.Surface] = {}
         self.world_surf = pygame.Surface((WIDTH, HEIGHT))
         self.side_surf = pygame.Surface((HEIGHT, WIDTH))
         self.level_index = min(MAX_LEVEL, max(1, int(saved.get("level_index", 1)))) if saved else 1
@@ -171,6 +177,10 @@ class Game:
         self.elapsed = 0.0
         self.view_flip = 1.0
         self.view_rot = 0.0
+        self.view_dark = 0.0
+        self.flash = 0.0
+        self.flash_timer = 0.0
+        self.flash_echo = 0.0
         self.state = "playing"
         self.crash_timer = 0.0
         self.effects.engine_accumulator = 0.0
@@ -179,14 +189,17 @@ class Game:
             self.shake_magnitude = max(self.shake_magnitude, 3.0)
 
     def _current_speed(self) -> float:
-        level_bonus = (self.level_index - 1) * 15.0
+        level_bonus = (min(self.level_index, 10) - 1) * 15.0 + max(0, self.level_index - 10) * 8.0
         base = BASE_FORWARD_SPEED + level_bonus
         return min(MAX_FORWARD_SPEED + level_bonus * 0.5, base + self.rocket.x * FORWARD_ACCELERATION)
 
     def _crash(self, side: str) -> None:
         self.best_x = max(self.best_x, self.rocket.x)
         impact_x = max(0.0, min(float(self.terrain.length), self.rocket.x))
-        impact_y = self.terrain.floor_y_at(impact_x) if side == "floor" else self.terrain.ceiling_y_at(impact_x)
+        if side == "obstacle":
+            impact_y = self.rocket.y
+        else:
+            impact_y = self.terrain.floor_y_at(impact_x) if side == "floor" else self.terrain.ceiling_y_at(impact_x)
 
         # A próbálkozás útvonala szellemként megmarad a következő körökre.
         self.ghosts.append(Ghost(self.trail_x[:], self.trail_y[:], side))
@@ -213,7 +226,12 @@ class Game:
                 x = ghost.xs[-1]
                 y = ghost.ys[-1]
                 radius, depth = self._crater_params()
-                self.terrain.carve_crater(x, ghost.side, radius, depth)
+                if ghost.side != "obstacle":
+                    self.terrain.carve_crater(x, ghost.side, radius, depth)
+                for obstacle in self.terrain.destroy_obstacles_near(x):
+                    t = len(self.trail_x) * PHYSICS_STEP
+                    ox, oy = obstacle.position(t)
+                    self.effects.explosion(ox, oy, scale=0.8)
                 self.effects.explosion(x, y, scale=1.0)
                 self.shake_timer = max(self.shake_timer, 0.2)
                 self.shake_magnitude = max(self.shake_magnitude, 6.0)
@@ -321,6 +339,9 @@ class Game:
         self.view_flip += max(-4.0 * dt, min(4.0 * dt, target - self.view_flip))
         rot_target = 1.0 if self.terrain.is_rotated(self.rocket.x) else 0.0
         self.view_rot += max(-2.2 * dt, min(2.2 * dt, rot_target - self.view_rot))
+        in_dark = self.terrain.is_dark(self.rocket.x)
+        self.view_dark += max(-3.0 * dt, min(3.0 * dt, (1.0 if in_dark else 0.0) - self.view_dark))
+        self._update_lightning(dt, in_dark)
         if self.shake_timer > 0:
             self.shake_timer = max(0.0, self.shake_timer - dt)
             self.shake_magnitude *= max(0.0, 1.0 - dt * 5.0)
@@ -341,6 +362,23 @@ class Game:
         while self.accumulator >= PHYSICS_STEP and self.state == "playing":
             self.accumulator -= PHYSICS_STEP
             self._physics_step(thrust)
+
+    def _update_lightning(self, dt: float, in_dark: bool) -> None:
+        """Sötét zónában rendszeres villámlás; a kettős felvillanás utánozza a valódi villámot."""
+        self.flash = max(0.0, self.flash - dt * 3.2)
+        if not in_dark:
+            self.flash_timer = 0.0
+            self.flash_echo = 0.0
+            return
+        if self.flash_echo > 0.0:
+            self.flash_echo -= dt
+            if self.flash_echo <= 0.0:
+                self.flash = max(self.flash, 0.85)
+        self.flash_timer -= dt
+        if self.flash_timer <= 0.0:
+            self.flash = 1.0
+            self.flash_timer = random.uniform(0.8, 1.3)
+            self.flash_echo = 0.16 if random.random() < 0.45 else 0.0
 
     def _physics_step(self, thrust: bool) -> None:
         self._step_ghosts()
@@ -367,8 +405,19 @@ class Game:
         ceiling_y = self.terrain.ceiling_y_at(self.rocket.x)
         if self.rocket.y - ROCKET_RADIUS <= floor_y:
             self._crash("floor")
-        elif self.rocket.y + ROCKET_RADIUS >= ceiling_y:
+            return
+        if self.rocket.y + ROCKET_RADIUS >= ceiling_y:
             self._crash("ceiling")
+            return
+
+        t = len(self.trail_x) * PHYSICS_STEP
+        for obstacle in self.terrain.obstacles:
+            if not obstacle.alive or abs(obstacle.x - self.rocket.x) > obstacle.radius + obstacle.amp_x + ROCKET_RADIUS:
+                continue
+            ox, oy = obstacle.position(t)
+            if math.hypot(self.rocket.x - ox, self.rocket.y - oy) <= obstacle.radius + ROCKET_RADIUS:
+                self._crash("obstacle")
+                return
 
     def _draw_ghosts(self, camera_x: float, shake_x: int, shake_y: int) -> None:
         width, height = self.screen.get_size()
@@ -396,7 +445,13 @@ class Game:
         self._draw_background(camera_x, shake_x, shake_y)
         self._draw_flip_bands(camera_x, shake_x, shake_y)
         self.terrain.draw(surface, camera_x, shake_x, shake_y)
+        obstacle_time = len(self.trail_x) * PHYSICS_STEP + (self.accumulator if self.state == "playing" else 0.0)
+        self._draw_obstacles(surface, camera_x, shake_x, shake_y, obstacle_time, beacons_only=False)
         self._draw_ghosts(camera_x, shake_x, shake_y)
+        darkness = self.view_dark * (1.0 - min(1.0, self.flash * 1.15))
+        if darkness > 0.01:
+            self._apply_darkness(surface, darkness)
+            self._draw_obstacles(surface, camera_x, shake_x, shake_y, obstacle_time, beacons_only=True)
         self.effects.draw(surface, camera_x, shake_x, shake_y)
 
         if self.state == "playing":
@@ -405,6 +460,59 @@ class Game:
             pressed = pygame.key.get_pressed()
             thrust = pressed[pygame.K_SPACE] or pressed[pygame.K_w] or pressed[pygame.K_UP]
             self.rocket.draw(surface, rocket_screen_x, rocket_screen_y, bool(thrust), self.elapsed)
+
+    def _apply_darkness(self, surface: pygame.Surface, amount: float) -> None:
+        size = surface.get_size()
+        layer = self._dark_layers.get(size)
+        if layer is None:
+            layer = pygame.Surface(size)
+            layer.fill((0, 0, 0))
+            self._dark_layers[size] = layer
+        layer.set_alpha(int(255 * min(1.0, amount)))
+        surface.blit(layer, (0, 0))
+
+    def _mine_sprite(self, radius: int) -> pygame.Surface:
+        sprite = self._mine_cache.get(radius)
+        if sprite is None:
+            size = radius * 2 + 20
+            sprite = pygame.Surface((size, size), pygame.SRCALPHA)
+            c = size // 2
+            for k in range(8):
+                angle = k * math.tau / 8
+                tip = (c + math.cos(angle) * (radius + 9), c + math.sin(angle) * (radius + 9))
+                left = (c + math.cos(angle - 0.22) * (radius - 2), c + math.sin(angle - 0.22) * (radius - 2))
+                right = (c + math.cos(angle + 0.22) * (radius - 2), c + math.sin(angle + 0.22) * (radius - 2))
+                pygame.draw.polygon(sprite, (150, 158, 176), (tip, left, right))
+            pygame.draw.circle(sprite, (44, 49, 66), (c, c), radius)
+            pygame.draw.circle(sprite, (122, 132, 156), (c, c), radius, 3)
+            self._mine_cache[radius] = sprite
+        return sprite
+
+    def _draw_obstacles(
+        self,
+        surface: pygame.Surface,
+        camera_x: float,
+        shake_x: int,
+        shake_y: int,
+        t: float,
+        beacons_only: bool,
+    ) -> None:
+        width, height = surface.get_size()
+        pulse = 0.5 + 0.5 * math.sin(self.clock * 9.0)
+        for obstacle in self.terrain.obstacles:
+            if not obstacle.alive:
+                continue
+            ox, oy = obstacle.position(t)
+            sx = int(ox - camera_x + shake_x)
+            sy = int(height / 2 - oy + shake_y)
+            if sx < -80 or sx > width + 80:
+                continue
+            if not beacons_only:
+                image = pygame.transform.rotate(self._mine_sprite(int(obstacle.radius)), (t * 70.0) % 360.0)
+                surface.blit(image, image.get_rect(center=(sx, sy)))
+            glow = int(obstacle.radius * 0.45)
+            pygame.draw.circle(surface, (255, int(60 + 80 * pulse), 50), (sx, sy), glow)
+            pygame.draw.circle(surface, (255, 220, 200), (sx, sy), max(2, glow // 2))
 
     def draw(self) -> None:
         if self.menu_open:
@@ -476,6 +584,7 @@ class Game:
     ZONE_COLORS = {
         "flip": ((230, 80, 255), (80, 220, 255)),
         "side": ((255, 160, 50), (90, 255, 140)),
+        "dark": ((150, 150, 255), (255, 245, 140)),
     }
 
     def _flip_markers(self) -> list[tuple[float, bool, str]]:
@@ -512,6 +621,8 @@ class Game:
             color = self.ZONE_COLORS[kind][0 if entering else 1]
             if kind == "flip":
                 label = "GRAVITY FLIP" if entering else "GRAVITY NORMAL"
+            elif kind == "dark":
+                label = "DARKNESS" if entering else "LIGHT"
             else:
                 label = "GRAVITY TURN" if entering else "GRAVITY NORMAL"
             rendered = self.font_tiny.render(label, True, color)
@@ -520,12 +631,15 @@ class Game:
                 if sy < 90 or sy > HEIGHT + 40:
                     continue
                 self.screen.blit(rendered, (WIDTH // 2 - rendered.get_width() // 2, sy - 28))
-                self._gravity_arrow(WIDTH // 2, sy - 40, (1, 0), color, 1.2)
+                if kind != "dark":
+                    self._gravity_arrow(WIDTH // 2, sy - 40, (1, 0), color, 1.2)
                 continue
             sx = int(offset)
             if sx < -120 or sx > WIDTH + 120:
                 continue
             self.screen.blit(rendered, (sx - rendered.get_width() // 2 + 10, 116))
+            if kind == "dark":
+                continue
             if not entering:
                 direction = (0, 1)
             else:
@@ -575,12 +689,18 @@ class Game:
         sector = self.menu_sector
         best = self.best_x if sector == self.level_index else self.bests.get(sector, 0.0)
         kinds = zone_kinds(sector)
-        flips, turns = kinds.count("flip"), kinds.count("side")
-        zones = "  ".join(part for part in (f"{flips} GRAVITY FLIP" if flips else "", f"{turns} GRAVITY TURN" if turns else "") if part)
-        if sector >= 10:
+        flips, turns, darks = kinds.count("flip"), kinds.count("side"), dark_count(sector)
+        parts = [
+            f"{flips} GRAVITY FLIP" if flips else "",
+            f"{turns} GRAVITY TURN" if turns else "",
+            f"{darks} DARK ZONES" if darks else "",
+            "MOVING MINES" if sector >= OBSTACLE_MIN_LEVEL else "",
+        ]
+        zones = "  ".join(part for part in parts if part)
+        if sector == 10 or sector >= FULL_COMBO_LEVEL:
             zones += "  (COMBINED)"
         self._center_text(f"SECTOR {sector:02d}   -   BEST {best / 1000:05.2f} km", 556, self.font_small, TEXT_MAIN)
-        self._center_text(zones or "NO GRAVITY ZONES", 590, self.font_tiny, TEXT_MUTED)
+        self._center_text(zones or "NO SPECIAL ZONES", 590, self.font_tiny, TEXT_MUTED)
         self._center_text("UP / DOWN  -  SELECT      LEFT / RIGHT  -  SECTOR      ENTER  -  CONFIRM      ESC  -  BACK", 640, self.font_tiny, TEXT_MUTED)
         self._center_text("In game: SPACE / W / UP  -  THRUST      R  -  RESTART SECTOR", 664, self.font_tiny, TEXT_MUTED)
 
@@ -642,12 +762,15 @@ class Game:
         direction = (1, 0) if rotated else (0, -1) if flipped else (0, 1)
         self._text("GRAVITY", 1110, 15, self.font_small, color)
         self._gravity_arrow(1235, 26, direction, color, 1.3)
-        ahead = [(x, kind) for x, entering, kind in self._flip_markers() if x > self.rocket.x]
+        ahead = [(x, kind, entering) for x, entering, kind in self._flip_markers() if x > self.rocket.x]
         if ahead:
-            next_x, next_kind = min(ahead)
+            next_x, next_kind, next_entering = min(ahead)
             if next_x - self.rocket.x < 500 and int(self.clock * 4) % 2 == 0:
                 if next_kind == "side":
                     self._center_text("! ROTATION AHEAD !", 84, self.font_small, self.ZONE_COLORS["side"][0])
+                elif next_kind == "dark":
+                    if next_entering:
+                        self._center_text("! DARKNESS AHEAD !", 84, self.font_small, self.ZONE_COLORS["dark"][0])
                 else:
                     self._center_text("! GRAVITY SHIFT AHEAD !", 84, self.font_small, (255, 120, 255))
 

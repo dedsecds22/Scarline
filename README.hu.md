@@ -47,7 +47,10 @@ python main.py
 - **Gravitációváltás** (2. szektortól 1, a 4.-től 2 zóna): az egész nézet fejjel lefelé fordul, a gravitáció felfelé húz, a hajtómű lefelé tol. Lila (belépés) és kék (kilépés) sáv jelzi.
 - **Gravitációs elforgatás** (6. szektortól 1, a 8.-tól 2 zóna): az egész nézet 90 fokkal elfordul; felfelé haladsz, a gravitáció jobbra húz, a hajtómű balra tol. Narancs (belépés) és zöld (kilépés) sáv jelzi.
 - **10. szektor:** minden kombinálva, többek között egy fordított gravitációs zóna, amely egy elforgatott zóna közepén kezdődik.
-- Szektorválasztó (1–10) a főmenüben, szektoronként külön rekorddal.
+- **11–16. szektor:** szélesebb járat, de **mozgó aknák** pásztázzák a járatot. A szellemek az aknákat is elpusztítják, ahogy a krátert is kirobbantják: ahol egy korábbi próba lezuhant, ott a következő körben az akna eltűnik.
+- **13. szektortól:** **sötét zónák** — a pálya fekete, csak rendszeres villámlás (kb. másodpercenként) világítja meg; az aknákon piros jelzőfény látszik. Ibolya (belépés) és sárga (kilépés) sáv jelzi.
+- **15–16. szektor:** minden kombinálva: fordítós és elforgatós zónák, sötét zónák és mozgó aknák.
+- Szektorválasztó (1–16) a főmenüben, szektoronként külön rekorddal.
 - HUD távolsággal, sebességgel, gravitációjelzővel, figyelmeztetésekkel és zónajelölőkkel a haladási csíkon.
 
 ## Technikai megjegyzések
